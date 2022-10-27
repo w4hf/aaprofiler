@@ -17,7 +17,14 @@ All the variables are described below.
 
 ## Requirements
 
-All you need is `python3` (apart from love)
+All you need is `python3` (and love)
+
+
+## Demo
+
+[![asciicast](https://asciinema.org/a/nPl94bUfYLkiAvo22K6dZ0Ws5.svg)](https://asciinema.org/a/nPl94bUfYLkiAvo22K6dZ0Ws5)
+
+PS: In the demo, I removed the roles extraction because it is time-consuming
 
 ## Editable Variables
 
