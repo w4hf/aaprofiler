@@ -33,7 +33,7 @@ requests.packages.urllib3.disable_warnings()
 # ------------------------ EDIT ONLY THIS BLOCK !!
 controller_host = 'https://localhost'
 controller_user = 'admin'
-controller_pass = '*********'
+controller_pass = '***********'
 page_size = 200
 results_dir = "results"
 
@@ -311,7 +311,7 @@ for resource in resources_to_extract:
         pages_count = 1
     print('________________________________________________________________')
     print('Extracting ' + resource + '....')
-    print('There a total of ' + str(count) + ' ' + resource + ' in ' + str(
+    print('There is a total of ' + str(count) + ' ' + resource + ' in ' + str(
         pages_count) + ' pages ! Extracting it all ...')
 
     f = open(results_dir + '/' + resource + '.csv', "w")
@@ -320,7 +320,7 @@ for resource in resources_to_extract:
     for x in range(1, pages_count + 1):
         getattr(sys.modules[__name__], "extract_%s" % resource)(f, x)
 
-    print(resource + " extraction complete. Results stored in : " + results_dir + '/' + f.name)
+    print(resource + " extraction complete. Results stored in : " + f.name)
     f.close()
 
 print('________________________________________________________________')
