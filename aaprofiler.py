@@ -2,13 +2,12 @@
 
 #############################################
 #                                           #
-#       Project : AAProfiler                #
-#       Author: Hamza Bouabdallah           #
-#       Company: RedHat                     #
-#       Version: 0.1                        #
-#       Date: 24/10/2022                    #
-#       LinkedIn: www.linkedin.com/in/w4hf  #
-#       Github:  @w4hf                      #
+#     Project : AAProfiler                  #
+#     Author: Hamza Bouabdallah             #
+#     Company: RedHat                       #
+#     Version: 0.2                          #
+#     LinkedIn: www.linkedin.com/in/w4hf    #
+#     Github:  @w4hf                        #
 #                                           #
 #############################################
 
@@ -31,34 +30,176 @@ import requests
 requests.packages.urllib3.disable_warnings()
 
 # ------------------------ EDIT ONLY THIS BLOCK !!
-controller_host = 'https://localhost'
+controller_host = 'https://vip.aap'
 controller_user = 'admin'
-controller_pass = '***********'
+controller_pass = '**************'
 page_size = 200
 results_dir = "results"
 
 # You can extract Everything :
-resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'roles', 'inventories']
+resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'roles', 'inventories', 'users', 'teams']
 
 # OR You can pick and chose, for example to extract only hosts and projects :
 # resources_to_extract = ['hosts', 'projects']
 
-# OR if you want to extract only credentials uncomment :
-# resources_to_extract = ['credentials']
-# -------------------------------------------- DO NOT EDIT ANYTHING BELOW THIS LINE
+# -------------------------------------------- !! DO NOT EDIT ANYTHING BELOW THIS LINE !!
 
 headers = {'projects': 'Project ID;Organization;Project Name;Credential',
            'hosts': 'Host ID;Organization;Inventory;Hostname;ansible_host;ansible_ssh_host',
            'credentials': 'Credential ID;Organization;Credential Name;Kind',
            'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory',
            'roles': 'Role ID;Object Type;Object Name;Role;Users;Teams',
-           'inventories': 'Inventory ID;Organization;Inventory Name;Total Hosts;Total Groups;Has Inventory Source'
+           'inventories': 'Inventory ID;Organization;Inventory Name;Total Hosts;Total Groups;Has Inventory Source',
+           'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
+           'teams': 'Team ID;Team Name;Organization;Users'
            }
 
-# Crete results directory if it does not exist
+# Create results directory if it does not exist
 isExist = os.path.exists(results_dir)
 if not isExist:
     os.makedirs(results_dir)
+
+
+def extract_teams(file, n):
+    print("Page " + str(n) + ' / ' + str(pages_count) + '...')
+    req = requests.get(controller_host + '/api/v2/' + resource + '?page=' + str(n) + '&page_size=' + str(page_size),
+                       auth=(controller_user, controller_pass), verify=False)
+    page_n = req.json()
+
+    for team in page_n['results']:
+        # Get Hostname
+        team_id = team['id']
+        team_name = team['name']
+        team_org = team['summary_fields']['organization']['name']
+
+        # Get teams users
+        team_users = ['']
+        r = requests.get(
+            controller_host + '/api/v2/teams/' + str(team_id) + '/users?page=1&page_size=' + str(page_size),
+            auth=(controller_user, controller_pass), verify=False)
+        team_users_page1 = r.json()
+        team_users_count = team_users_page1['count']
+        team_users_pages_count = math.ceil(team_users_count // page_size)
+        if team_users_pages_count == 0:
+            team_users_pages_count = 1
+
+        if team_users_count > 0:
+            print(' +++ Team ' + str(team_id) + ' has ' + str(
+                team_users_count) + ' user(s). Extracting it from ' + str(
+                team_users_pages_count) + ' page(s).')
+            for user_team_page_n in range(1, team_users_pages_count + 1):
+                user_team_list_raw = requests.get(
+                    controller_host + '/api/v2/teams/' + str(team_id) + '/users?page=' + str(
+                        user_team_page_n) + '&page_size=' + str(
+                        page_size), auth=(controller_user, controller_pass), verify=False)
+                user_team_list = user_team_list_raw.json()
+                if user_team_list['results']:
+                    for t in user_team_list['results']:
+                        team_users.append(t['username'])
+
+        # Removing empty first element
+        if len(team_users) > 1 and team_users[0] == '':
+            del team_users[0]
+
+        result = str(team_id) + ';' + team_name + ';' + team_org + ';' + str(team_users)
+
+        file.write(result + "\n")
+
+
+def extract_users(file, n):
+    print("Page " + str(n) + ' / ' + str(pages_count) + '...')
+    req = requests.get(controller_host + '/api/v2/' + resource + '?page=' + str(n) + '&page_size=' + str(page_size),
+                       auth=(controller_user, controller_pass), verify=False)
+    page_n = req.json()
+
+    for user in page_n['results']:
+        # Get Hostname
+        user_id = user['id']
+        username = user['username']
+
+        if user['first_name']:
+            user_first_name = user['first_name']
+        else:
+            user_first_name = 'Null'
+
+        if user['last_name']:
+            user_last_name = user['last_name']
+        else:
+            user_last_name = 'Null'
+
+        # Get ldap_dn
+        if user['ldap_dn']:
+            user_ldap_dn = user['ldap_dn']
+        else:
+            user_ldap_dn = 'Null'
+
+        # Get is_superuser
+        if user['is_superuser']:
+            user_is_superuser = user['is_superuser']
+        else:
+            user_is_superuser = 'Null'
+
+        # Get user teams
+        user_teams = ['']
+        r = requests.get(
+            controller_host + '/api/v2/users/' + str(user_id) + '/teams?page=1&page_size=' + str(page_size),
+            auth=(controller_user, controller_pass), verify=False)
+        user_teams_page1 = r.json()
+        user_teams_count = user_teams_page1['count']
+        user_teams_pages_count = math.ceil(user_teams_count // page_size)
+        if user_teams_pages_count == 0:
+            user_teams_pages_count = 1
+
+        if user_teams_count > 0:
+            print(' +++ User ' + str(user_id) + ' belongs to ' + str(
+                user_teams_count) + ' teams(s). Extracting it from ' + str(
+                user_teams_pages_count) + ' page(s).')
+            for user_team_page_n in range(1, user_teams_pages_count + 1):
+                user_team_list_raw = requests.get(
+                    controller_host + '/api/v2/users/' + str(user_id) + '/teams?page=' + str(
+                        user_team_page_n) + '&page_size=' + str(
+                        page_size), auth=(controller_user, controller_pass), verify=False)
+                user_team_list = user_team_list_raw.json()
+                if user_team_list['results']:
+                    for t in user_team_list['results']:
+                        user_teams.append(t['name'])
+
+        # Removing empty first element
+        if len(user_teams) > 1 and user_teams[0] == '':
+            del user_teams[0]
+
+        # Get user Orgs
+        user_orgs = ['']
+        r = requests.get(
+            controller_host + '/api/v2/users/' + str(user_id) + '/organizations?page=1&page_size=' + str(page_size),
+            auth=(controller_user, controller_pass), verify=False)
+        user_orgs_page1 = r.json()
+        user_orgs_count = user_orgs_page1['count']
+        user_orgs_pages_count = math.ceil(user_orgs_count // page_size)
+        if user_orgs_pages_count == 0:
+            user_orgs_pages_count = 1
+
+        if user_orgs_count > 0:
+            print(' +++ User ' + str(user_id) + ' belongs to ' + str(
+                user_orgs_count) + ' Organization(s). Extracting it from ' + str(
+                user_orgs_pages_count) + ' page(s).')
+            for user_org_page_n in range(1, user_orgs_pages_count + 1):
+                user_org_list_raw = requests.get(
+                    controller_host + '/api/v2/users/' + str(user_id) + '/organizations?page=' + str(
+                        user_org_page_n) + '&page_size=' + str(
+                        page_size), auth=(controller_user, controller_pass), verify=False)
+                user_org_list = user_org_list_raw.json()
+                if user_org_list['results']:
+                    for t in user_org_list['results']:
+                        user_orgs.append(t['name'])
+
+        # Removing empty first element
+        if len(user_orgs) > 1 and user_orgs[0] == '':
+            del user_orgs[0]
+
+        result = str(
+            user_id) + ';' + username + ';' + user_first_name + ';' + user_last_name + ';' + str(user_teams) + ';' + str(user_orgs) + ';' + user_ldap_dn + ';' + str(user_is_superuser)
+        file.write(result + "\n")
 
 
 def extract_inventories(file, n):
@@ -105,8 +246,9 @@ def extract_roles(file, n):
 
             print(' + Extracting details of role ' + str(role_id))
             # Get Role Users
-            r = requests.get(controller_host + '/api/v2/roles/' + str(role_id) + '/users?page=1&page_size=' + str(page_size),
-                             auth=(controller_user, controller_pass), verify=False)
+            r = requests.get(
+                controller_host + '/api/v2/roles/' + str(role_id) + '/users?page=1&page_size=' + str(page_size),
+                auth=(controller_user, controller_pass), verify=False)
             user_page1 = r.json()
             user_count = user_page1['count']
             user_pages_count = math.ceil(user_count // page_size)
@@ -118,7 +260,8 @@ def extract_roles(file, n):
                     user_pages_count) + ' page(s).')
                 for user_n in range(1, user_pages_count + 1):
                     role_users_list_raw = requests.get(
-                        controller_host + '/api/v2/roles/' + str(role_id) + '/users?page=' + str(user_n) + '&page_size=' + str(
+                        controller_host + '/api/v2/roles/' + str(role_id) + '/users?page=' + str(
+                            user_n) + '&page_size=' + str(
                             page_size), auth=(controller_user, controller_pass), verify=False)
                     role_users_list = role_users_list_raw.json()
                     if role_users_list['results']:
@@ -131,8 +274,9 @@ def extract_roles(file, n):
 
             # Get Role Teams
 
-            r = requests.get(controller_host + '/api/v2/roles/' + str(role_id) + '/teams?page=1&page_size=' + str(page_size),
-                             auth=(controller_user, controller_pass), verify=False)
+            r = requests.get(
+                controller_host + '/api/v2/roles/' + str(role_id) + '/teams?page=1&page_size=' + str(page_size),
+                auth=(controller_user, controller_pass), verify=False)
             teams_page1 = r.json()
             teams_count = teams_page1['count']
             teams_pages_count = math.ceil(teams_count // page_size)
@@ -145,7 +289,8 @@ def extract_roles(file, n):
                     teams_pages_count) + ' page(s).')
                 for team_n in range(1, teams_pages_count + 1):
                     role_teams_list_raw = requests.get(
-                        controller_host + '/api/v2/roles/' + str(role_id) + '/teams?page=' + str(team_n) + '&page_size=' + str(
+                        controller_host + '/api/v2/roles/' + str(role_id) + '/teams?page=' + str(
+                            team_n) + '&page_size=' + str(
                             page_size), auth=(controller_user, controller_pass), verify=False)
                     role_teams_list = role_teams_list_raw.json()
                     if role_teams_list['results']:
@@ -219,8 +364,9 @@ def extract_credentials(file, n):
         kind = cred['summary_fields']['credential_type']['name']
 
         # Getting access list to this cred
-        access_list_raw = requests.get(controller_host + '/api/v2/credentials/' + str(id) + '/access_list?page_size=200',
-                                       auth=(controller_user, controller_pass), verify=False)
+        access_list_raw = requests.get(
+            controller_host + '/api/v2/credentials/' + str(id) + '/access_list?page_size=200',
+            auth=(controller_user, controller_pass), verify=False)
         access_list = access_list_raw.json()
 
         result = str(cred_id) + ';' + org + ';' + cred_name + ';' + kind
@@ -290,7 +436,8 @@ def extract_hosts(file, n):
 
         # Getting Org Name of inventory
         org_id = str(host['summary_fields']['inventory']['organization_id'])
-        org_raw = requests.get(controller_host + '/api/v2/organizations/' + org_id, auth=(controller_user, controller_pass), verify=False)
+        org_raw = requests.get(controller_host + '/api/v2/organizations/' + org_id,
+                               auth=(controller_user, controller_pass), verify=False)
         org = org_raw.json()
         org_name = org['name']
 
@@ -309,7 +456,7 @@ for resource in resources_to_extract:
     pages_count = math.ceil(count // page_size)
     if pages_count == 0:
         pages_count = 1
-    print('________________________________________________________________')
+    print('______________________________________________________________________________________________')
     print('Extracting ' + resource + '....')
     print('There is a total of ' + str(count) + ' ' + resource + ' in ' + str(
         pages_count) + ' pages ! Extracting it all ...')
@@ -323,7 +470,7 @@ for resource in resources_to_extract:
     print(resource + " extraction complete. Results stored in : " + f.name)
     f.close()
 
-print('________________________________________________________________')
+print('______________________________________________________________________________________________')
 print('')
 print('###########################################################################')
 print('###  Extraction complete results are under "' + results_dir + '" directory.')
