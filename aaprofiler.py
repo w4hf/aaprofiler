@@ -137,7 +137,7 @@ def extract_users(file, n):
         if user['is_superuser']:
             user_is_superuser = user['is_superuser']
         else:
-            user_is_superuser = 'Null'
+            user_is_superuser = 'False'
 
         # Get user teams
         user_teams = ['']
