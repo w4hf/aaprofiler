@@ -39,6 +39,10 @@ controller_user = 'admin'
 controller_pass = '**********'
 page_size = 200
 
+# Set this to 'True' to fetch Org names instead of Org ID when extracting hosts
+# !! Warning setting this to 'True' makes the extraction much slower !!
+get_hosts_org_name = False
+
 # You can extract Everything :
 resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles']
 
@@ -78,7 +82,7 @@ sys.stdout = Logger()
 headers = {'projects': 'Project ID;Organization;Project Name;Credential',
            'hosts': 'Host ID;Organization;Inventory;Hostname;ansible_host;ansible_ssh_host',
            'credentials': 'Credential ID;Organization;Credential Name;Kind',
-           'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory',
+           'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory;limit',
            'roles': 'Role ID;Object Type;Object Name;Role;Users;Teams',
            'inventories': 'Inventory ID;Organization;Inventory Name;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
            'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
@@ -465,9 +469,15 @@ def extract_job_templates(file, n):
         if jt['summary_fields']['credentials']:
             for c in jt['summary_fields']['credentials']:
                 jt_creds.append(c['name'])
+        
+        # Get limit
+        if jt['limit']:
+            jt_limit = jt['limit']
+        else:
+            jt_limit = 'Null'
 
 
-        result = str(jt_id) + ';' + jt_org + ';' + jt_name + ';' + jt_project + ';' + str(jt_creds) + ';' + jt_inventory
+        result = str(jt_id) + ';' + jt_org + ';' + jt_name + ';' + jt_project + ';' + str(jt_creds) + ';' + jt_inventory + ';' + jt_limit
         file.write(result + "\n")
 
 
@@ -538,6 +548,7 @@ def extract_hosts(file, n):
         # Get Hostname
         host_id = host['id']
         hostname = host['name']
+        org_id = str(host['summary_fields']['inventory']['organization_id'])
         vars = host['variables']
 
         # Get inventory of host
@@ -562,14 +573,15 @@ def extract_hosts(file, n):
         else:
             host_ansible_ssh_host = ''
 
-        # Getting Org Name of inventory
-        org_id = str(host['summary_fields']['inventory']['organization_id'])
-        org_raw = requests.get(controller_host + '/api/v2/organizations/' + org_id,
-                               auth=(controller_user, controller_pass), verify=False)
-        org = org_raw.json()
-        org_name = org['name']
+        # Getting Org Name of inventory if "get_hosts_org_name" is set to True
+        if get_hosts_org_name:
+            org_raw = requests.get(controller_host + '/api/v2/organizations/' + org_id, auth=(controller_user, controller_pass), verify=False)
+            org = org_raw.json()
+            org = org['name']
+        else:
+            org = org_id
 
-        result = str(host_id) + ';' + org_name + ';' + inventory + ';' + hostname + ';' + str(
+        result = str(host_id) + ';' + org + ';' + inventory + ';' + hostname + ';' + str(
             host_ansible_host) + ';' + str(host_ansible_ssh_host_list)
         file.write(result + "\n")
 
@@ -580,7 +592,7 @@ print('')
 print('########################################################################################')
 print('###  STARTING EXTRACTION ')
 print('###  Controller = "'+ str(controller_host)+'"')
-print('###  Resource to extract = '+str(resources_to_extract))
+print('###  Resource(s) to extract = '+str(resources_to_extract))
 print('###  Date = ' + str(now))
 print('########################################################################################')
 print('')
@@ -613,7 +625,7 @@ print('#########################################################################
 print('###  EXTRACTION COMPLETE ')
 print('###  Controller = "'+ str(controller_host)+'"')
 print('###  Results directory = "' + results_dir + '"')
-print('###  Extracted Resources = '+str(resources_to_extract))
+print('###  Extracted Resource(s) = '+str(resources_to_extract))
 print('###  Date = ' + str(now))
 print('########################################################################################')
 print('')
