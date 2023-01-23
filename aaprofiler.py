@@ -44,7 +44,9 @@ page_size = 200
 get_hosts_org_name = False
 
 # You can extract Everything :
-resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles']
+#resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+
+resources_to_extract = ['workflow_job_templates']
 
 # OR You can choose a subset to extract :
 # resources_to_extract = ['projects', 'teams']
@@ -87,7 +89,8 @@ headers = {'projects': 'Project ID;Organization;Project Name;Credential',
            'inventories': 'Inventory ID;Organization;Inventory Name;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
            'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
            'teams': 'Team ID;Team Name;Organization;Users',
-           'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials'
+           'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials',
+           'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit'
            }
 
 
@@ -438,6 +441,43 @@ def extract_roles(file, n):
                 result = str(role_id) + ';' + resource_type + ';' + resource_name + ';' + role_name + ';' + str(
                     role_users_list_names) + ';' + str(role_teams_list_names)
                 file.write(result + "\n")
+
+
+
+def extract_workflow_job_templates(file, n):
+    print("++ Page " + str(n) + ' / ' + str(pages_count) + '...')
+    req = requests.get(controller_host + '/api/v2/' + resource + '?page=' + str(n) + '&page_size=' + str(page_size),
+                       auth=(controller_user, controller_pass), verify=False)
+    page_n = req.json()
+
+    for wkfl in page_n['results']:
+        # Get Hostname
+        wkfl_id = wkfl['id']
+        wkfl_name = wkfl['name']
+
+        # Get Org
+        if wkfl['organization']:
+            wkfl_org = wkfl['organization']
+        else:
+            wkfl_org = 'Null'
+
+        # Get Inventory
+        if wkfl['inventory']:
+            wkfl_inventory = wkfl['inventory']
+        else:
+            wkfl_inventory = 'Null'
+        
+        # Get limit
+        if wkfl['limit']:
+            wkfl_limit = wkfl['limit']
+        else:
+            wkfl_limit = 'Null'
+
+
+        result = str(wkfl_id) + ';' + str(wkfl_org) + ';' + wkfl_name + ';' + str(wkfl_inventory) + ';' + wkfl_limit 
+        file.write(result + "\n")
+
+
 
 
 def extract_job_templates(file, n):
