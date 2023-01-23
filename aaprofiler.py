@@ -16,6 +16,7 @@
 # - projects
 # - hosts
 # - job_templates
+# - workflow_job_templates
 # - roles
 # - inventories
 # - inventory sources
