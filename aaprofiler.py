@@ -41,7 +41,7 @@ from datetime import datetime
 requests.packages.urllib3.disable_warnings()
 
 # -------------------------------------------- EDIT ONLY THIS BLOCK !! --------------------------------------------
-controller_fqdn = 'www.controller.company'
+controller_fqdn = 'controller.example.com'
 controller_user = 'admin'
 controller_pass = '**********'
 controller_port = 443
@@ -762,7 +762,7 @@ all_possible_resources = ['credentials', 'projects', 'hosts', 'job_templates', '
 pre_flight_check()
 
 results_dir = 'results_' + controller_fqdn.replace(".", "_").lower()
-controller_host = 'https://' + controller_fqdn
+controller_host = 'https://' + controller_fqdn + ':' + str(controller_port)
 
 now = datetime.now()
 print('')
