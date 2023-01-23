@@ -46,10 +46,8 @@ get_hosts_org_name = False
 # You can extract Everything :
 #resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
 
-resources_to_extract = ['workflow_job_templates']
-
 # OR You can choose a subset to extract :
-# resources_to_extract = ['projects', 'teams']
+resources_to_extract = ['job_templates', 'workflow_job_templates']
 
 # -----------------------------------------------------------------------------------------------------------------
 
