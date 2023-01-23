@@ -8,6 +8,7 @@ The objects audited are :
 - projects
 - hosts
 - job_templates
+- workflow_job_templates
 - inventories
 - inventory sources
 - teams
