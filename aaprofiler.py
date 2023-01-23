@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+'''
 #############################################
 #                                           #
 #     Project : AAProfiler                  #
@@ -10,34 +11,40 @@
 #                                           #
 #############################################
 
-# This python Script scrape AWX or AAP Controller (Tower) API and Generate csv files Reports.
-# The objects audited are :
-# - credentials
-# - projects
-# - hosts
-# - job_templates
-# - workflow_job_templates
-# - roles
-# - inventories
-# - inventory sources
-# - teams
-# - users
-# Each object will have its own csv file generated under the 'results_XXX' where XXX is the fqdn of the controller
-# Also, a log file named 'extraction.log' is created under the same results directory
+ This python Script scrape AWX or AAP Controller (Tower) API and Generate csv files Reports.
+
+ The objects extracted are :
+ - credentials
+ - projects
+ - hosts
+ - job_templates
+ - workflow_job_templates
+ - roles
+ - inventories
+ - inventory sources
+ - teams
+ - users
+
+ Each object will have its own csv file generated under the 'results_XXX' where XXX is the fqdn of the controller
+ Also, a log file named 'extraction.log' is created under the same results directory
+'''
 
 import os
 import sys
 import re
 import requests
+import socket
+from contextlib import closing
 from datetime import datetime
 
 
 requests.packages.urllib3.disable_warnings()
 
 # -------------------------------------------- EDIT ONLY THIS BLOCK !! --------------------------------------------
-controller_fqdn = 'www.controller.company'
+controller_fqdn = 'controller.example.com'
 controller_user = 'admin'
 controller_pass = '**********'
+controller_port = 443
 page_size = 200
 
 # Set this to 'True' to fetch Org names instead of Org ID when extracting hosts
@@ -56,42 +63,6 @@ resources_to_extract = ['credentials', 'projects', 'job_templates', 'inventories
 
 # -------------------------------------------- DO NOT EDIT ANYTHING BELOW THIS LINE ! ----------------------------
 
-results_dir = 'results_' + controller_fqdn.replace(".", "_").lower()
-controller_host = 'https://' + controller_fqdn
-
-# Create results directory if it does not exist
-resultDirExist = os.path.exists(results_dir)
-if not resultDirExist:
-    os.makedirs(results_dir)
-
-
-class Logger(object):
-    def __init__(self):
-        self.terminal = sys.stdout
-        self.log = open(results_dir+"/extraction.log", "a")
-
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-
-    def flush(self):
-        # this flush method is needed for python 3 compatibility.
-        # this handles the flush command by doing nothing.
-        pass
-
-
-sys.stdout = Logger()
-headers = {'projects': 'Project ID;Organization;Project Name;Credential;Creator;Last Modified by',
-           'hosts': 'Host ID;Organization;Inventory;Hostname;ansible_host;ansible_ssh_host',
-           'credentials': 'Credential ID;Organization;Credential Name;Kind;Creator;Last Modified by',
-           'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory;limit;Creator;Last Modified by',
-           'roles': 'Role ID;Object Type;Object Name;Role;Users;Teams',
-           'inventories': 'Inventory ID;Organization;Inventory Name;Created By;Last Modified by;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
-           'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
-           'teams': 'Team ID;Team Name;Organization;Users',
-           'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials',
-           'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit;Creator;Last Modified by'
-           }
 
 
 def extract_inventory_sources(file, n):
@@ -285,16 +256,18 @@ def extract_inventories(file, n):
             inventory_org = 'Null'
 
         # Get Inventory Creator
-        if inventory['summary_fields']['created_by']['username']:
-            inventory_creator = inventory['summary_fields']['created_by']['username']
-        else:
-            inventory_creator = 'Null'
+        if 'created_by' in inventory['summary_fields']:
+            if inventory['summary_fields']['created_by']['username']:
+                inventory_creator = inventory['summary_fields']['created_by']['username']
+            else:
+                inventory_creator = 'Null'
 
         # Get last modified by
-        if inventory['summary_fields']['modified_by']['username']:
-            inventory_last_modified_by = inventory['summary_fields']['created_by']['username']
-        else:
-            inventory_last_modified_by = 'Null'
+        if 'modified_by' in inventory['summary_fields']:
+            if inventory['summary_fields']['modified_by']['username']:
+                inventory_last_modified_by = inventory['summary_fields']['created_by']['username']
+            else:
+                inventory_last_modified_by = 'Null'
 
 
         inventory_sources_list = list()
@@ -578,16 +551,18 @@ def extract_credentials(file, n):
         kind = cred['summary_fields']['credential_type']['name']
 
         # Get cred Created_by
-        if cred['summary_fields']['created_by']['username']:
-            cred_creator = cred['summary_fields']['created_by']['username']
-        else:
-            cred_creator = 'Null'
+        if 'created_by' in cred['summary_fields']:
+            if cred['summary_fields']['created_by']['username']:
+                cred_creator = cred['summary_fields']['created_by']['username']
+            else:
+                cred_creator = 'Null'
 
         # Get cred last modified by
-        if cred['summary_fields']['modified_by']['username']:
-            cred_last_modified_by = cred['summary_fields']['created_by']['username']
-        else:
-            cred_last_modified_by = 'Null'
+        if 'modified_by' in cred['summary_fields']:
+            if cred['summary_fields']['modified_by']['username']:
+                cred_last_modified_by = cred['summary_fields']['created_by']['username']
+            else:
+                cred_last_modified_by = 'Null'
 
         # Getting access list to this cred
         # access_list_raw = requests.get(
@@ -685,8 +660,90 @@ def extract_hosts(file, n):
             host_ansible_host) + ';' + str(host_ansible_ssh_host_list)
         file.write(result + "\n")
 
+   
+def check_socket(host, port):
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        if sock.connect_ex((host, port)) == 0:
+            #print(f"{host} is reachable on port {port} !")
+            return True
+        else:
+            print(f" ERROR : {host} is NOT reachable on port {port} !")
+            return False
+
+
+def pre_flight_check():
+    if not controller_fqdn:
+        print('ERROR : Controller address or hostname or FQDN is not defined ! Exiting.')
+        exit(1)
+
+    if not check_socket(controller_fqdn, controller_port):
+        print(f'ERROR : Controller {controller_fqdn} unreachable on port {controller_port} ! Exiting.')
+        exit(2)
+
+    if not controller_user:
+        print(f'ERROR : User is not defined ! Exiting.')
+        exit(3)
+    
+    if not controller_pass:
+        print(f'ERROR : Password is not defined ! Exiting.')
+        exit(3)
+
+    if not page_size:
+        print(f"ERROR : Page size (page_size) is not defined ! Please define it than rerun.")
+        exit(6)
+
+    if not isinstance(page_size, int):
+        print(f"ERROR : Page size (page_size) should be an integer and not {type(page_size)} !")
+        exit(6)
+
+    if 0 > page_size or page_size > 200:
+        print(f"ERROR : Page size (page_size) should be between 1 and 200 (and not {page_size}) !")
+        exit(7)
+
+    if not isinstance(get_hosts_org_name, bool):
+        print(f"ERROR : Page size (page_size) should be a boolean and not {type(get_hosts_org_name)} !")
+        exit(8)
+
+    if not resources_to_extract:
+        print(f"ERROR : Resources to be extract (resources_to_extract) is not defined !")
+        exit(9)
+
+    if not isinstance(resources_to_extract, list):
+        print(f"ERROR : Resources to be extract (resources_to_extract) should be a list and not {type(get_hosts_org_name)} !")
+        exit(10)
+
+    for res in resources_to_extract:
+        if res not in all_possible_resource:
+            print(f"ERROR : {res} is not a known resource. Should be one of : {all_possible_resource} !")
+            exit(11)
+
+    try:
+        req1 = requests.get(f"https://{controller_fqdn}/api/v2/ping", verify=False)
+    except:
+        #print(req1)
+        print(f"ERROR : Controller API is not responding. Are you sure the controller address/FQDN is correct ?")
+        exit(4)
+
+    
+    req2 = requests.get(f"https://{controller_fqdn}/api/v2/me",auth=(controller_user, controller_pass), verify=False)
+    if int(req2.status_code) > 299 :
+        print(f"ERROR : User is not authorized. Please chcek the provided username and password !")
+        exit(5)
+
+    else:
+        me = req2.json()
+        if not me['results'][0]['is_superuser'] or not me['results'][0]['is_system_auditor']:
+            print('')
+            print('________________________________________________________________________________________________________________________________________________')
+            print(f'!!    WARNING : The user "{controller_user}" is not system administrator or system auditor. The script will probably fail to extract everything    !!')
+            print('________________________________________________________________________________________________________________________________________________')
+            print('')
 
 # Main
+all_possible_resource = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+results_dir = 'results_' + controller_fqdn.replace(".", "_").lower()
+controller_host = 'https://' + controller_fqdn
+
 now = datetime.now()
 print('')
 print('########################################################################################')
@@ -696,6 +753,44 @@ print('###  Resource(s) to extract = '+str(resources_to_extract))
 print('###  Date = ' + str(now))
 print('########################################################################################')
 print('')
+
+
+# Create results directory if it does not exist
+resultDirExist = os.path.exists(results_dir)
+if not resultDirExist:
+    os.makedirs(results_dir)
+
+
+class Logger(object):
+    def __init__(self):
+        self.terminal = sys.stdout
+        self.log = open(results_dir+"/extraction.log", "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        # this flush method is needed for python 3 compatibility.
+        # this handles the flush command by doing nothing.
+        pass
+
+
+sys.stdout = Logger()
+headers = {'projects': 'Project ID;Organization;Project Name;Credential;Creator;Last Modified by',
+           'hosts': 'Host ID;Organization;Inventory;Hostname;ansible_host;ansible_ssh_host',
+           'credentials': 'Credential ID;Organization;Credential Name;Kind;Creator;Last Modified by',
+           'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory;limit;Creator;Last Modified by',
+           'roles': 'Role ID;Object Type;Object Name;Role;Users;Teams',
+           'inventories': 'Inventory ID;Organization;Inventory Name;Created By;Last Modified by;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
+           'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
+           'teams': 'Team ID;Team Name;Organization;Users',
+           'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials',
+           'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit;Creator;Last Modified by'
+           }
+
+pre_flight_check()
+
 for resource in resources_to_extract:
 
     r = requests.get(controller_host + '/api/v2/' + resource + '?page=1&page_size=' + str(page_size),
