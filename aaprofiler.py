@@ -4,7 +4,7 @@
 #     Project : AAProfiler                  #
 #     Author: Hamza Bouabdallah             #
 #     Company: RedHat                       #
-#     Version: 0.3                          #
+#     Version: 0.4                          #
 #     LinkedIn: www.linkedin.com/in/w4hf    #
 #     Github:  @w4hf                        #
 #                                           #
@@ -44,10 +44,11 @@ page_size = 200
 get_hosts_org_name = False
 
 # You can extract Everything :
-#resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+# resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+
 
 # OR You can choose a subset to extract :
-resources_to_extract = ['job_templates', 'workflow_job_templates']
+resources_to_extract = ['credentials', 'projects', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams', 'workflow_job_templates']
 
 # -----------------------------------------------------------------------------------------------------------------
 
@@ -79,16 +80,16 @@ class Logger(object):
 
 
 sys.stdout = Logger()
-headers = {'projects': 'Project ID;Organization;Project Name;Credential',
+headers = {'projects': 'Project ID;Organization;Project Name;Credential;Creator;Last Modified by',
            'hosts': 'Host ID;Organization;Inventory;Hostname;ansible_host;ansible_ssh_host',
-           'credentials': 'Credential ID;Organization;Credential Name;Kind',
-           'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory;limit',
+           'credentials': 'Credential ID;Organization;Credential Name;Kind;Creator;Last Modified by',
+           'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory;limit;Creator;Last Modified by',
            'roles': 'Role ID;Object Type;Object Name;Role;Users;Teams',
-           'inventories': 'Inventory ID;Organization;Inventory Name;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
+           'inventories': 'Inventory ID;Organization;Inventory Name;Created By;Last Modified by;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
            'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
            'teams': 'Team ID;Team Name;Organization;Users',
            'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials',
-           'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit'
+           'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit;Creator;Last Modified by'
            }
 
 
@@ -282,6 +283,19 @@ def extract_inventories(file, n):
         else:
             inventory_org = 'Null'
 
+        # Get Inventory Creator
+        if inventory['summary_fields']['created_by']['username']:
+            inventory_creator = inventory['summary_fields']['created_by']['username']
+        else:
+            inventory_creator = 'Null'
+
+        # Get last modified by
+        if inventory['summary_fields']['modified_by']['username']:
+            inventory_last_modified_by = inventory['summary_fields']['created_by']['username']
+        else:
+            inventory_last_modified_by = 'Null'
+
+
         inventory_sources_list = list()
         # Get inventory sources
         if inventory_has_sources:
@@ -321,7 +335,7 @@ def extract_inventories(file, n):
 
                         inventory_sources_list.append(inventory_source)
 
-        result = str(inventory_id) + ';' + inventory_org + ';' + inventory_name + ';' + inventory_kind + ';' + str(
+        result = str(inventory_id) + ';' + inventory_org + ';' + inventory_name + ';' + inventory_creator + ';' + inventory_last_modified_by + ';' + inventory_kind + ';' + str(
             inventory_total_hosts) + ';' + str(inventory_total_groups) + ';' + inventory_host_filter + ';' + str(
             inventory_has_sources) + ';' + str(inventory_sources_list)
 
@@ -472,7 +486,19 @@ def extract_workflow_job_templates(file, n):
             wkfl_limit = 'Null'
 
 
-        result = str(wkfl_id) + ';' + str(wkfl_org) + ';' + wkfl_name + ';' + str(wkfl_inventory) + ';' + wkfl_limit 
+        # Get wkfl Creator
+        if wkfl['summary_fields']['created_by']['username']:
+            wkfl_creator = wkfl['summary_fields']['created_by']['username']
+        else:
+            wkfl_creator = 'Null'
+
+        # Get wkfl last modified by
+        if wkfl['summary_fields']['modified_by']['username']:
+            wkfl_last_modified_by = wkfl['summary_fields']['created_by']['username']
+        else:
+            wkfl_last_modified_by = 'Null'
+
+        result = str(wkfl_id) + ';' + str(wkfl_org) + ';' + wkfl_name + ';' + str(wkfl_inventory) + ';' + wkfl_limit + ';' + wkfl_creator + ';' + wkfl_last_modified_by
         file.write(result + "\n")
 
 
@@ -514,8 +540,19 @@ def extract_job_templates(file, n):
         else:
             jt_limit = 'Null'
 
+        # Get JT Creator
+        if jt['summary_fields']['created_by']['username']:
+            jt_creator = jt['summary_fields']['created_by']['username']
+        else:
+            jt_creator = 'Null'
 
-        result = str(jt_id) + ';' + jt_org + ';' + jt_name + ';' + jt_project + ';' + str(jt_creds) + ';' + jt_inventory + ';' + jt_limit
+        # Get JT last modified by
+        if jt['summary_fields']['modified_by']['username']:
+            jt_last_modified_by = jt['summary_fields']['created_by']['username']
+        else:
+            jt_last_modified_by = 'Null'
+
+        result = str(jt_id) + ';' + jt_org + ';' + jt_name + ';' + jt_project + ';' + str(jt_creds) + ';' + jt_inventory + ';' + jt_limit  + ';' + jt_creator + ';' + jt_last_modified_by
         file.write(result + "\n")
 
 
@@ -539,13 +576,25 @@ def extract_credentials(file, n):
         # Get kind
         kind = cred['summary_fields']['credential_type']['name']
 
-        # Getting access list to this cred
-        access_list_raw = requests.get(
-            controller_host + '/api/v2/credentials/' + str(id) + '/access_list?page_size=200',
-            auth=(controller_user, controller_pass), verify=False)
-        access_list = access_list_raw.json()
+        # Get cred Created_by
+        if cred['summary_fields']['created_by']['username']:
+            cred_creator = cred['summary_fields']['created_by']['username']
+        else:
+            cred_creator = 'Null'
 
-        result = str(cred_id) + ';' + org + ';' + cred_name + ';' + kind
+        # Get cred last modified by
+        if cred['summary_fields']['modified_by']['username']:
+            cred_last_modified_by = cred['summary_fields']['created_by']['username']
+        else:
+            cred_last_modified_by = 'Null'
+
+        # Getting access list to this cred
+        # access_list_raw = requests.get(
+        #     controller_host + '/api/v2/credentials/' + str(id) + '/access_list?page_size=200',
+        #     auth=(controller_user, controller_pass), verify=False)
+        # access_list = access_list_raw.json()
+
+        result = str(cred_id) + ';' + org + ';' + cred_name + ';' + kind + ';' + cred_creator + ';' + cred_last_modified_by
         file.write(result + "\n")
 
 
@@ -572,7 +621,19 @@ def extract_projects(file, n):
         else:
             project_cred = 'Null'
 
-        result = str(project_id) + ';' + project_org + ';' + project_name + ';' + project_cred
+        # Get Created_by
+        if project['summary_fields']['created_by']['username']:
+            project_creator = project['summary_fields']['created_by']['username']
+        else:
+            project_creator = 'Null'
+
+        # Get last modified by
+        if project['summary_fields']['modified_by']['username']:
+            project_last_modified_by = project['summary_fields']['created_by']['username']
+        else:
+            project_last_modified_by = 'Null'
+
+        result = str(project_id) + ';' + project_org + ';' + project_name + ';' + project_cred + ';' + project_creator + ';' + project_last_modified_by
         file.write(result + "\n")
 
 
