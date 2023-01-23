@@ -41,29 +41,27 @@ from datetime import datetime
 requests.packages.urllib3.disable_warnings()
 
 # -------------------------------------------- EDIT ONLY THIS BLOCK !! --------------------------------------------
-controller_fqdn = 'controller.example.com'
+controller_fqdn = 'www.controller.company'
 controller_user = 'admin'
 controller_pass = '**********'
 controller_port = 443
+
+# Set the API return page object count, should be between 1 and 200.
 page_size = 200
 
-# Set this to 'True' to fetch Org names instead of Org ID when extracting hosts
-# !! Warning setting this to 'True' makes the extraction much slower !!
-get_hosts_org_name = False
-
 # You can extract Everything :
-# resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
-
+resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
 
 # OR You can choose a subset to extract :
-resources_to_extract = ['credentials', 'projects', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams', 'workflow_job_templates']
+# resources_to_extract = ['credentials', 'projects', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams', 'workflow_job_templates']
 
-# -----------------------------------------------------------------------------------------------------------------
+# Set this to 'True' to fetch Org names instead of Org ID when extracting hosts
+# !! Warning setting this to 'True' makes the extraction much slower (depending on how many hosts you have) !!
+get_hosts_org_name = False
 
+# -------------------------------------------------------------------------------------------------------------------
 
-# -------------------------------------------- DO NOT EDIT ANYTHING BELOW THIS LINE ! ----------------------------
-
-
+# -------------------------------------------- DO NOT EDIT ANYTHING BELOW THIS LINE ! -------------------------------
 
 def extract_inventory_sources(file, n):
     print("++ Page " + str(n) + ' / ' + str(pages_count) + ' ...')
@@ -476,8 +474,6 @@ def extract_workflow_job_templates(file, n):
         file.write(result + "\n")
 
 
-
-
 def extract_job_templates(file, n):
     print("++ Page " + str(n) + ' / ' + str(pages_count) + '...')
     req = requests.get(controller_host + '/api/v2/' + resource + '?page=' + str(n) + '&page_size=' + str(page_size),
@@ -663,84 +659,108 @@ def extract_hosts(file, n):
    
 def check_socket(host, port):
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-        if sock.connect_ex((host, port)) == 0:
-            #print(f"{host} is reachable on port {port} !")
-            return True
-        else:
-            print(f" ERROR : {host} is NOT reachable on port {port} !")
+        try:
+            if sock.connect_ex((host, port)) == 0:
+                return True
+            else:
+                return False
+        except:
             return False
 
 
 def pre_flight_check():
-    if not controller_fqdn:
-        print('ERROR : Controller address or hostname or FQDN is not defined ! Exiting.')
+    try: controller_fqdn
+    except NameError:
+        print('ERROR : Controller address or hostname or FQDN (controller_fqdn) is not defined ! Exiting.')
         exit(1)
 
-    if not check_socket(controller_fqdn, controller_port):
-        print(f'ERROR : Controller {controller_fqdn} unreachable on port {controller_port} ! Exiting.')
+    try: controller_user
+    except NameError:
+        print(f'ERROR : User (controller_user) is not defined ! Exiting.')
         exit(2)
-
-    if not controller_user:
-        print(f'ERROR : User is not defined ! Exiting.')
-        exit(3)
     
-    if not controller_pass:
-        print(f'ERROR : Password is not defined ! Exiting.')
+    try: controller_pass
+    except NameError:
+        print(f'ERROR : Password (controller_pass) is not defined ! Exiting.')
         exit(3)
 
-    if not page_size:
+    try: controller_port
+    except NameError:
+        print(f'ERROR : Port (controller_port) is not defined ! Exiting.')
+        exit(4)
+
+    if not isinstance(controller_port, int):
+        print(f"ERROR : Port (controller_port) should be an integer and not {type(page_size)} !")
+        exit(5)
+
+    try: page_size
+    except NameError:
         print(f"ERROR : Page size (page_size) is not defined ! Please define it than rerun.")
         exit(6)
 
     if not isinstance(page_size, int):
         print(f"ERROR : Page size (page_size) should be an integer and not {type(page_size)} !")
-        exit(6)
+        exit(7)
 
     if 0 > page_size or page_size > 200:
         print(f"ERROR : Page size (page_size) should be between 1 and 200 (and not {page_size}) !")
-        exit(7)
+        exit(8)
+
+    try: get_hosts_org_name
+    except NameError:
+        print(f"ERROR : get_hosts_org_name is not defined ! Please define it than rerun.")
+        exit(9)
+
 
     if not isinstance(get_hosts_org_name, bool):
         print(f"ERROR : Page size (page_size) should be a boolean and not {type(get_hosts_org_name)} !")
-        exit(8)
+        exit(10)
 
     if not resources_to_extract:
         print(f"ERROR : Resources to be extract (resources_to_extract) is not defined !")
-        exit(9)
+        exit(11)
 
     if not isinstance(resources_to_extract, list):
         print(f"ERROR : Resources to be extract (resources_to_extract) should be a list and not {type(get_hosts_org_name)} !")
-        exit(10)
+        exit(12)
 
     for res in resources_to_extract:
-        if res not in all_possible_resource:
-            print(f"ERROR : {res} is not a known resource. Should be one of : {all_possible_resource} !")
-            exit(11)
+        if res not in all_possible_resources:
+            print(f"ERROR : '{res}' is not a known resource. Should be one of : {all_possible_resources} !")
+            exit(13)
+
+    if not check_socket(controller_fqdn, controller_port):
+        print(f'ERROR : Controller {controller_fqdn} unreachable on port {controller_port} ! Exiting.')
+        exit(14)
 
     try:
         req1 = requests.get(f"https://{controller_fqdn}/api/v2/ping", verify=False)
+        if req1.status_code > 299:
+            print(f"ERROR : Controller API is not responding. Are you sure the controller address/FQDN is correct ?")
+            exit(15)
     except:
-        #print(req1)
         print(f"ERROR : Controller API is not responding. Are you sure the controller address/FQDN is correct ?")
-        exit(4)
+        exit(16)
 
-    
     req2 = requests.get(f"https://{controller_fqdn}/api/v2/me",auth=(controller_user, controller_pass), verify=False)
     if int(req2.status_code) > 299 :
-        print(f"ERROR : User is not authorized. Please chcek the provided username and password !")
-        exit(5)
+        print(f"ERROR : User is not authorized. Please check the provided username and password !")
+        exit(17)
 
     else:
         me = req2.json()
-        if not me['results'][0]['is_superuser'] or not me['results'][0]['is_system_auditor']:
+        if not me['results'][0]['is_superuser'] and not me['results'][0]['is_system_auditor']:
             print('')
             print('________________________________________________________________________________________________________________________________________________')
-            print(f'!!    WARNING : The user "{controller_user}" is not system administrator or system auditor. The script will probably fail to extract everything    !!')
+            print(f'!!    WARNING : The user "{controller_user}" is not system administrator or system auditor. The script will probably NOT extract everything    !!')
             print('________________________________________________________________________________________________________________________________________________')
             print('')
 
 # Main
-all_possible_resource = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+all_possible_resources = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+
+pre_flight_check()
+
 results_dir = 'results_' + controller_fqdn.replace(".", "_").lower()
 controller_host = 'https://' + controller_fqdn
 
@@ -754,12 +774,10 @@ print('###  Date = ' + str(now))
 print('########################################################################################')
 print('')
 
-
 # Create results directory if it does not exist
 resultDirExist = os.path.exists(results_dir)
 if not resultDirExist:
     os.makedirs(results_dir)
-
 
 class Logger(object):
     def __init__(self):
@@ -777,19 +795,19 @@ class Logger(object):
 
 
 sys.stdout = Logger()
-headers = {'projects': 'Project ID;Organization;Project Name;Credential;Creator;Last Modified by',
-           'hosts': 'Host ID;Organization;Inventory;Hostname;ansible_host;ansible_ssh_host',
-           'credentials': 'Credential ID;Organization;Credential Name;Kind;Creator;Last Modified by',
-           'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory;limit;Creator;Last Modified by',
-           'roles': 'Role ID;Object Type;Object Name;Role;Users;Teams',
-           'inventories': 'Inventory ID;Organization;Inventory Name;Created By;Last Modified by;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
-           'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
-           'teams': 'Team ID;Team Name;Organization;Users',
-           'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials',
-           'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit;Creator;Last Modified by'
-           }
 
-pre_flight_check()
+headers = {
+            'projects': 'Project ID;Organization;Project Name;Credential;Creator;Last Modified by',
+            'hosts': 'Host ID;Organization;Inventory;Hostname;ansible_host;ansible_ssh_host',
+            'credentials': 'Credential ID;Organization;Credential Name;Kind;Creator;Last Modified by',
+            'job_templates': 'Job Template ID;Organization;Job Template Name;Project;Credentials;Inventory;limit;Creator;Last Modified by',
+            'roles': 'Role ID;Object Type;Object Name;Role;Users;Teams',
+            'inventories': 'Inventory ID;Organization;Inventory Name;Created By;Last Modified by;Inventory Kind;Total Hosts;Total Groups;Host Filter;Has Inventory Source;Inventory Sources Details',
+            'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
+            'teams': 'Team ID;Team Name;Organization;Users',
+            'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials',
+            'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit;Creator;Last Modified by'
+        }
 
 for resource in resources_to_extract:
 
