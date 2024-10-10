@@ -4,6 +4,7 @@
 
 This python Script scrape AWX or AAP Controller (Tower) API and Generate csv files Reports.
 The objects audited are :
+- host_metrics
 - credentials (sensitive data cannot be collected)
 - projects
 - hosts
