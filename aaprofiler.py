@@ -5,7 +5,7 @@
 #     Project : AAProfiler                  #
 #     Author: Hamza Bouabdallah             #
 #     Company: RedHat                       #
-#     Version: 0.4                          #
+#     Version: 0.5                          #
 #     LinkedIn: www.linkedin.com/in/w4hf    #
 #     Github:  @w4hf                        #
 #                                           #
@@ -50,7 +50,7 @@ controller_port = 443
 page_size = 200
 
 # You can extract Everything :
-resources_to_extract = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+# resources_to_extract = ['host_metrics', 'credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
 
 # OR You can choose a subset to extract :
 # resources_to_extract = ['credentials', 'projects', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams', 'workflow_job_templates']
@@ -609,6 +609,40 @@ def extract_projects(file, n):
         file.write(result + "\n")
 
 
+def extract_host_metrics(file, n):
+    print("++ Page " + str(n) + ' / ' + str(pages_count) + '...')
+    req = requests.get(controller_host + '/api/v2/' + resource + '?page=' + str(n) + '&page_size=' + str(page_size),
+                       auth=(controller_user, controller_pass), verify=False)
+    page_n = req.json()
+
+    for host_metric in page_n['results']:
+        # Get Hostname
+        host_metric_id = host_metric['id']
+        hostname = host_metric['hostname']
+        automated_counter = host_metric['automated_counter']
+        first_automation = host_metric['first_automation']
+        last_automation = host_metric['last_automation']
+        deleted_counter = host_metric['deleted_counter']
+        deleted = host_metric['deleted']
+        url = host_metric['url']
+
+        # Get Credentials
+        if host_metric['last_deleted']:
+            last_deleted = host_metric['last_deleted']
+        else:
+            last_deleted = 'Null'
+
+        # Get Created_by
+        if host_metric['used_in_inventories']:
+            used_in_inventories = host_metric['used_in_inventories']
+        else:
+            used_in_inventories = 'Null'
+
+# 'host_metrics': 'host metric ID;hostname;automated_counter;deleted_counter;deleted;first_automation;last_automation;last_deleted;used_in_inventories;url'
+        result = str(host_metric_id) + ';' + hostname + ';' + str(automated_counter) + ';' + str(deleted_counter) + ';' + str(deleted) + ';' + first_automation + ';' + last_automation + ';' + last_deleted + ';' + used_in_inventories + ';' + url
+        file.write(result + "\n")
+
+
 def extract_hosts(file, n):
     print("++ Page " + str(n) + ' / ' + str(pages_count) + '...')
 
@@ -757,7 +791,7 @@ def pre_flight_check():
             print('')
 
 # Main
-all_possible_resources = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates']
+all_possible_resources = ['credentials', 'projects', 'hosts', 'job_templates', 'inventories', 'inventory_sources', 'users', 'teams',  'roles', 'workflow_job_templates', 'host_metrics']
 
 pre_flight_check()
 
@@ -806,7 +840,8 @@ headers = {
             'users': 'User ID;Username;First Name;Last Name;Teams;Orgs;LDAP DN;Superuser',
             'teams': 'Team ID;Team Name;Organization;Users',
             'inventory_sources': 'Organization;Source Name;Source Type;Parent Inventory;Source Project;Source Credentials',
-            'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit;Creator;Last Modified by'
+            'workflow_job_templates': 'Workflow ID;Organization;Workflow Name;Inventory;limit;Creator;Last Modified by',
+            'host_metrics': 'host metric ID;hostname;automated_counter;deleted_counter;deleted;first_automation;last_automation;last_deleted;used_in_inventories;url'
         }
 
 for resource in resources_to_extract:
